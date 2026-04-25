@@ -9,8 +9,12 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+print(f"BOT_TOKEN: {'OK' if BOT_TOKEN else 'NONE!'}")
+print(f"WEBHOOK_URL: {WEBHOOK_URL}")
+
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 app = Flask(__name__)
+
 
 # --- ROUTES
 
@@ -21,30 +25,24 @@ def health():
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
-    print("WEBHOOK CALLED")
     json_str = request.get_data().decode("UTF-8")
-    print(f"RAW DATA: '{json_str[:500]}'")
-    print(f"CONTENT TYPE: {request.content_type}")
-    print(f"HEADERS: {dict(request.headers)}")
-    
     if not json_str:
-        print("EMPTY BODY!")
         return "OK", 200
-    
     update = telebot.types.Update.de_json(json_str)
     bot.process_new_updates([update])
     return "OK", 200
 
+
 @app.route("/set_webhook", methods=["GET"])
 def set_webhook():
     bot.remove_webhook()
-    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    return "Webhook set!", 200
+    result = bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    return f"Webhook set: {result}", 200
 
 
 # --- HANDLERS
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=["start"])
 def start(message):
     bot.send_message(
         message.chat.id,
@@ -60,7 +58,7 @@ def start(message):
     )
 
 
-@bot.message_handler(commands=['help'])
+@bot.message_handler(commands=["help"])
 def help_command(message):
     bot.send_message(
         message.chat.id,
@@ -68,14 +66,13 @@ def help_command(message):
         "Vazifani oddiy yozing:\n\n"
         "• Bugun 1 soat sport\n"
         "• Ertaga 19:00 uchrashuv\n"
-        "• Har kuni 30 min kitob o‘qish\n\n"
+        "• Har kuni 30 min kitob o'qish\n\n"
         "Men sizga optimal vaqt reja tuzib beraman 📅"
     )
 
 
 @bot.message_handler(func=lambda message: True)
 def handle_task(message):
-    print(f"MESSAGE RECEIVED: {message.text}")  # ← shu yerga
     user_text = message.text
 
     wait_msg = bot.send_message(
@@ -85,7 +82,6 @@ def handle_task(message):
 
     try:
         result = generate_schedule(user_text)
-
         bot.edit_message_text(
             f"📅 <b>Sizning rejangiz:</b>\n\n{result}",
             chat_id=wait_msg.chat.id,
