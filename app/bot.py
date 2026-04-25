@@ -35,6 +35,13 @@ def webhook():
     bot.process_new_updates([update])
     return "OK", 200
 
+@app.route("/set_webhook", methods=["GET"])
+def set_webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    return "Webhook set!", 200
+
+
 # --- HANDLERS
 
 @bot.message_handler(commands=['start'])
