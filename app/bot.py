@@ -28,17 +28,15 @@ def webhook():
     json_str = request.get_data().decode("UTF-8")
     if not json_str:
         return "OK", 200
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
+    try:
+        update = telebot.types.Update.de_json(json_str)
+        print(f"UPDATE: {update}")
+        print(f"MESSAGE: {update.message}")
+        bot.process_new_updates([update])
+        print("PROCESS DONE")
+    except Exception as e:
+        print(f"WEBHOOK ERROR: {type(e).__name__}: {e}")
     return "OK", 200
-
-
-@app.route("/set_webhook", methods=["GET"])
-def set_webhook():
-    bot.remove_webhook()
-    result = bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    return f"Webhook set: {result}", 200
-
 
 # --- HANDLERS
 
