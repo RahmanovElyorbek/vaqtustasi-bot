@@ -50,19 +50,22 @@ def set_webhook():
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    bot.send_message(
-        message.chat.id,
-        "👋 <b>Salom, men VaqtUstasi AI!</b>\n\n"
-        "Men sizning shaxsiy vaqt menejeringizman.\n\n"
-        "📅 Kunlik reja tuzaman\n"
-        "⏰ Vazifalarni vaqtga joylayman\n"
-        "🎯 Intizomni oshirishga yordam beraman\n\n"
-        "✍️ Vazifangizni yozing:\n"
-        "<i>Masalan:</i>\n"
-        "👉 Ertaga 2 soat ingliz tili\n"
-        "👉 Bugun 1 soat sport"
-    )
-
+    try:
+        bot.send_message(
+            message.chat.id,
+            "👋 <b>Salom, men VaqtUstasi AI!</b>\n\n"
+            "Men sizning shaxsiy vaqt menejeringizman.\n\n"
+            "📅 Kunlik reja tuzaman\n"
+            "⏰ Vazifalarni vaqtga joylayman\n"
+            "🎯 Intizomni oshirishga yordam beraman\n\n"
+            "✍️ Vazifangizni yozing:\n"
+            "<i>Masalan:</i>\n"
+            "👉 Ertaga 2 soat ingliz tili\n"
+            "👉 Bugun 1 soat sport"
+        )
+        print("START MESSAGE SENT")
+    except Exception as e:
+        print(f"START ERROR: {type(e).__name__}: {e}")
 
 @bot.message_handler(commands=["help"])
 def help_command(message):
