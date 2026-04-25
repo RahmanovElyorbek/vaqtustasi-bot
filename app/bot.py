@@ -84,8 +84,9 @@ def handle_task(message):
         )
 
     except Exception as e:
+        print(f"HANDLER ERROR: {type(e).__name__}: {e}")
         bot.edit_message_text(
-            "❌ Xatolik bo‘ldi. Qayta urinib ko‘ring.",
+            "❌ Xatolik bo'ldi. Qayta urinib ko'ring.",
             chat_id=wait_msg.chat.id,
             message_id=wait_msg.message_id
         )

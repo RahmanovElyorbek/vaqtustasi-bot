@@ -17,12 +17,16 @@ Scheduled Time: ...
 """
 
 def generate_schedule(user_text):
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_text}
-        ],
-        timeout=8
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_text}
+            ],
+            timeout=8
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"AI ERROR: {type(e).__name__}: {e}")
+        raise
