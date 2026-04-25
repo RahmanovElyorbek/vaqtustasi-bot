@@ -67,6 +67,7 @@ def help_command(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_task(message):
+    print(f"MESSAGE RECEIVED: {message.text}")  # ← shu yerga
     user_text = message.text
 
     wait_msg = bot.send_message(
@@ -90,4 +91,3 @@ def handle_task(message):
             chat_id=wait_msg.chat.id,
             message_id=wait_msg.message_id
         )
-        print("ERROR:", e)
