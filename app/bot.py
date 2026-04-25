@@ -23,17 +23,17 @@ def health():
 def webhook():
     print("WEBHOOK CALLED")
     json_str = request.get_data().decode("UTF-8")
+    print(f"RAW DATA: '{json_str[:500]}'")
+    print(f"CONTENT TYPE: {request.content_type}")
+    print(f"HEADERS: {dict(request.headers)}")
+    
+    if not json_str:
+        print("EMPTY BODY!")
+        return "OK", 200
+    
     update = telebot.types.Update.de_json(json_str)
     bot.process_new_updates([update])
     return "OK", 200
-
-
-@app.route("/set_webhook", methods=["GET"])
-def set_webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    return "Webhook set!", 200
-
 
 # --- HANDLERS
 
