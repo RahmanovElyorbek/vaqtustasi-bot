@@ -6,4 +6,3 @@ gunicorn==25.3.0
 requests==2.33.1
 psycopg2-binary==2.9.10
 apscheduler==3.10.4
-gevent==24.2.1
