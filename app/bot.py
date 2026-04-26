@@ -81,28 +81,6 @@ def help_command(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_task(message):
-    try:
-        user_text = message.text
-
-        wait_msg = bot.send_message(
-            message.chat.id,
-            "⏳ <i>VaqtUstasi rejalashtiryapti...</i>"
-        )
-        print(f"WAIT MSG ID: {wait_msg.message_id}")
-
-        try:
-            result = generate_schedule(user_text)
-            bot.edit_message_text(
-                f"📅 <b>Sizning rejangiz:</b>\n\n{result}",
-                chat_id=wait_msg.chat.id,
-                message_id=wait_msg.message_id
-            )
-        except Exception as e:
-            print(f"INNER ERROR: {type(e).__name__}: {e}")
-            bot.edit_message_text(
-                "❌ Xatolik bo'ldi. Qayta urinib ko'ring.",
-                chat_id=wait_msg.chat.id,
-                message_id=wait_msg.message_id
-            )
-    except Exception as e:
-        print(f"OUTER ERROR: {type(e).__name__}: {e}")
+    print(f"HANDLER CALLED: {message.chat.id}")
+    bot.send_message(message.chat.id, "Test xabar")
+    print("SENT!")
