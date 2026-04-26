@@ -1,8 +1,11 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+UZ_TZ = ZoneInfo("Asia/Tashkent")
 
 
 def get_connection():
@@ -12,6 +15,9 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cur = conn.cursor()
+    
+    # ⚠️ VAQTINCHALIK: eski jadvalni o'chirish
+    cur.execute("DROP TABLE IF EXISTS tasks CASCADE")
     
     # Foydalanuvchilar jadvali
     cur.execute("""
@@ -24,13 +30,13 @@ def init_db():
         )
     """)
     
-    # Vazifalar jadvali
+    # Vazifalar jadvali — yangi format
     cur.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id SERIAL PRIMARY KEY,
             user_id BIGINT REFERENCES users(user_id),
             task_text TEXT,
-            scheduled_time TEXT,
+            scheduled_time TIMESTAMP WITH TIME ZONE,
             is_done BOOLEAN DEFAULT FALSE,
             reminded BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
@@ -41,7 +47,6 @@ def init_db():
     cur.close()
     conn.close()
     print("Database initialized!")
-
 
 def save_user(user_id, first_name):
     conn = get_connection()
@@ -56,27 +61,34 @@ def save_user(user_id, first_name):
     conn.close()
 
 
-def save_task(user_id, task_text, scheduled_time):
+def save_task(user_id, task_text, scheduled_datetime):
+    """
+    scheduled_datetime — datetime obyekti (timezone bilan)
+    """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO tasks (user_id, task_text, scheduled_time)
         VALUES (%s, %s, %s)
-    """, (user_id, task_text, scheduled_time))
+    """, (user_id, task_text, scheduled_datetime))
     conn.commit()
     cur.close()
     conn.close()
 
 
-def get_pending_tasks(scheduled_time):
+def get_pending_tasks():
+    """
+    Vaqti yetib kelgan, lekin hali eslatilmagan vazifalarni qaytaradi.
+    """
     conn = get_connection()
     cur = conn.cursor()
+    now_uz = datetime.now(UZ_TZ)
     cur.execute("""
         SELECT * FROM tasks 
-        WHERE scheduled_time = %s 
+        WHERE scheduled_time <= %s 
         AND is_done = FALSE 
         AND reminded = FALSE
-    """, (scheduled_time,))
+    """, (now_uz,))
     tasks = cur.fetchall()
     cur.close()
     conn.close()

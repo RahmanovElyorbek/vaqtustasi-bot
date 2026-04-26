@@ -3,7 +3,8 @@ import telebot
 from flask import Flask, request
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.ai_service import generate_schedule
 from app.database import init_db, save_user, save_task, get_pending_tasks, mark_reminded, mark_done
@@ -12,6 +13,8 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
+UZ_TZ = ZoneInfo("Asia/Tashkent")
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=False)
 app = Flask(__name__)
@@ -26,26 +29,30 @@ print("Webhook o'rnatildi!")
 
 
 # --- Eslatma tizimi
-from datetime import datetime, timezone, timedelta
-
 def check_reminders():
-    # Uzbekiston vaqti UTC+5
-    uz_time = datetime.now(timezone.utc) + timedelta(hours=5)
-    now = uz_time.strftime("%H:%M")
-    print(f"Checking reminders at UZ time: {now}")
-    tasks = get_pending_tasks(now)
+    """Vaqti yetib kelgan vazifalarni tekshirish"""
+    now_uz = datetime.now(UZ_TZ)
+    print(f"Checking reminders at UZ time: {now_uz.strftime('%Y-%m-%d %H:%M')}")
+    
+    tasks = get_pending_tasks()
+    
     for task in tasks:
         try:
+            scheduled = task["scheduled_time"]
+            time_str = scheduled.strftime("%H:%M")
+            
             bot.send_message(
                 task["user_id"],
                 f"⏰ <b>Eslatma!</b>\n\n"
-                f"Siz <b>{task['task_text']}</b> vazifasini bajarishingiz kerak!\n\n"
+                f"Soat <b>{time_str}</b> bo'ldi.\n"
+                f"📌 <b>{task['task_text']}</b>\n\n"
                 f"Bajardingizmi?",
                 reply_markup=done_keyboard(task["id"])
             )
             mark_reminded(task["id"])
         except Exception as e:
             print(f"REMINDER ERROR: {e}")
+
 
 def done_keyboard(task_id):
     keyboard = telebot.types.InlineKeyboardMarkup()
@@ -95,7 +102,7 @@ def start(message):
         "⏰ Vazifa vaqti kelganda eslataman\n"
         "✅ Bajardingizmi deb so'rayman\n\n"
         "✍️ Vazifangizni yozing:\n"
-        "<i>Masalan: Bugun soat 7da sport, 19da ingliz tili</i>"
+        "<i>Masalan: Ertaga soat 7da sport, bugun 19da ingliz tili</i>"
     )
 
 
@@ -107,7 +114,8 @@ def help_command(message):
         "Vazifalarni oddiy yozing:\n\n"
         "• Bugun 1 soat sport\n"
         "• Ertaga 19:00 uchrashuv\n"
-        "• Har kuni 30 min kitob o'qish\n\n"
+        "• Juma kuni 14da hisobot\n"
+        "• 3 kundan keyin 10da yig'ilish\n\n"
         "Men sizga optimal vaqt reja tuzib beraman 📅"
     )
 
@@ -154,7 +162,7 @@ def handle_task(message):
                 message_id=wait_msg.message_id
             )
             for task in tasks:
-                save_task(message.from_user.id, task["vazifa"], task["vaqt"])
+                save_task(message.from_user.id, task["vazifa"], task["sana_vaqt"])
         else:
             # Suhbat rejimi
             bot.edit_message_text(
