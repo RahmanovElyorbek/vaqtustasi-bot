@@ -4,3 +4,5 @@ openai==2.32.0
 python-dotenv==1.2.2
 gunicorn==25.3.0
 requests==2.33.1
+psycopg2-binary==2.9.9
+apscheduler==3.10.4
