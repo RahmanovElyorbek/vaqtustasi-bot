@@ -136,27 +136,25 @@ def handle_task(message):
 
     wait_msg = bot.send_message(
         message.chat.id,
-        "⏳ <i>VaqtUstasi rejalashtiryapti...</i>"
+        "⏳ <i>VaqtUstasi o'ylayapti...</i>"
     )
 
     try:
         tasks, display = generate_schedule(user_text)
 
         if tasks:
-            # Vazifalarni bazaga saqlash
-            for task in tasks:
-                save_task(message.from_user.id, task["vazifa"], task["vaqt"])
-
             bot.edit_message_text(
-                f"📅 <b>Sizning rejangiz:</b>\n\n{display}\n\n"
+                f"📅 <b>Sizning rejangiz:</b>\n\n{display}"
                 f"✅ Vazifa vaqti kelganda eslataman!",
                 chat_id=wait_msg.chat.id,
                 message_id=wait_msg.message_id
             )
+            for task in tasks:
+                save_task(message.from_user.id, task["vazifa"], task["vaqt"])
         else:
+            # Suhbat rejimi
             bot.edit_message_text(
-                "❌ Vazifani tushunmadim. Qayta yozing.\n\n"
-                "<i>Masalan: Bugun soat 7da sport</i>",
+                display,
                 chat_id=wait_msg.chat.id,
                 message_id=wait_msg.message_id
             )
