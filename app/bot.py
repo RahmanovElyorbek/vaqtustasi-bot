@@ -3,7 +3,7 @@ import telebot
 from flask import Flask, request
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from app.ai_service import generate_schedule
 from app.database import init_db, save_user, save_task, get_pending_tasks, mark_reminded, mark_done
@@ -26,8 +26,13 @@ print("Webhook o'rnatildi!")
 
 
 # --- Eslatma tizimi
+from datetime import datetime, timezone, timedelta
+
 def check_reminders():
-    now = datetime.now().strftime("%H:%M")
+    # Uzbekiston vaqti UTC+5
+    uz_time = datetime.now(timezone.utc) + timedelta(hours=5)
+    now = uz_time.strftime("%H:%M")
+    print(f"Checking reminders at UZ time: {now}")
     tasks = get_pending_tasks(now)
     for task in tasks:
         try:
@@ -41,7 +46,6 @@ def check_reminders():
             mark_reminded(task["id"])
         except Exception as e:
             print(f"REMINDER ERROR: {e}")
-
 
 def done_keyboard(task_id):
     keyboard = telebot.types.InlineKeyboardMarkup()
