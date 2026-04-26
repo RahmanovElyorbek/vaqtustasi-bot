@@ -30,6 +30,7 @@ def webhook():
         return "OK", 200
     try:
         update = telebot.types.Update.de_json(json_str)
+        print(f"UPDATE TEXT: {update.message.text if update.message else 'no text'}")
         bot.process_new_updates([update])
         print("PROCESS DONE")
     except Exception as e:
@@ -37,11 +38,10 @@ def webhook():
     return "OK", 200
 
 
-
 @app.route("/set_webhook", methods=["GET"])
 def set_webhook():
     bot.remove_webhook()
-    result = bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    result = bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")  # ← to'g'ri
     return f"Webhook set: {result}", 200
 
 
