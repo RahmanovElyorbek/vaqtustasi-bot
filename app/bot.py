@@ -12,7 +12,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 print(f"BOT_TOKEN: {'OK' if BOT_TOKEN else 'NONE!'}")
 print(f"WEBHOOK_URL: {WEBHOOK_URL}")
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=False)
 app = Flask(__name__)
 
 
