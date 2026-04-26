@@ -9,11 +9,13 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-print(f"BOT_TOKEN: {'OK' if BOT_TOKEN else 'NONE!'}")
-print(f"WEBHOOK_URL: {WEBHOOK_URL}")
-
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=False)
 app = Flask(__name__)
+
+# --- Avtomatik webhook o'rnatish
+bot.remove_webhook()
+bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
+print("Webhook o'rnatildi!")
 
 
 # --- ROUTES
@@ -30,41 +32,29 @@ def webhook():
         return "OK", 200
     try:
         update = telebot.types.Update.de_json(json_str)
-        print(f"UPDATE TEXT: {update.message.text if update.message else 'no text'}")
         bot.process_new_updates([update])
-        print("PROCESS DONE")
     except Exception as e:
         print(f"WEBHOOK ERROR: {type(e).__name__}: {e}")
     return "OK", 200
-
-
-@app.route("/set_webhook", methods=["GET"])
-def set_webhook():
-    bot.remove_webhook()
-    result = bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")  # ← to'g'ri
-    return f"Webhook set: {result}", 200
 
 
 # --- HANDLERS
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    try:
-        bot.send_message(
-            message.chat.id,
-            "👋 <b>Salom, men VaqtUstasi AI!</b>\n\n"
-            "Men sizning shaxsiy vaqt menejeringizman.\n\n"
-            "📅 Kunlik reja tuzaman\n"
-            "⏰ Vazifalarni vaqtga joylayman\n"
-            "🎯 Intizomni oshirishga yordam beraman\n\n"
-            "✍️ Vazifangizni yozing:\n"
-            "<i>Masalan:</i>\n"
-            "👉 Ertaga 2 soat ingliz tili\n"
-            "👉 Bugun 1 soat sport"
-        )
-        print("START MESSAGE SENT")
-    except Exception as e:
-        print(f"START ERROR: {type(e).__name__}: {e}")
+    bot.send_message(
+        message.chat.id,
+        "👋 <b>Salom, men VaqtUstasi AI!</b>\n\n"
+        "Men sizning shaxsiy vaqt menejeringizman.\n\n"
+        "📅 Kunlik reja tuzaman\n"
+        "⏰ Vazifalarni vaqtga joylayman\n"
+        "🎯 Intizomni oshirishga yordam beraman\n\n"
+        "✍️ Vazifangizni yozing:\n"
+        "<i>Masalan:</i>\n"
+        "👉 Ertaga 2 soat ingliz tili\n"
+        "👉 Bugun 1 soat sport"
+    )
+
 
 @bot.message_handler(commands=["help"])
 def help_command(message):
@@ -95,7 +85,6 @@ def handle_task(message):
             chat_id=wait_msg.chat.id,
             message_id=wait_msg.message_id
         )
-
     except Exception as e:
         print(f"HANDLER ERROR: {type(e).__name__}: {e}")
         bot.edit_message_text(
