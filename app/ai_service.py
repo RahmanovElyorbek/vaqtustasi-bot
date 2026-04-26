@@ -1,3 +1,8 @@
+import os
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 SYSTEM_PROMPT = """
 Sen VaqtUstasi — o'zbek tilidagi aqlli shaxsiy vaqt menejeri AI assistentsan.
 
@@ -62,7 +67,6 @@ def generate_schedule(user_text: str) -> tuple[list, str]:
 
     raw = response.choices[0].message.content
 
-    # Vazifalarni parse qilish
     tasks = []
     blocks = raw.split("TASK_START")
     for block in blocks[1:]:
@@ -80,11 +84,9 @@ def generate_schedule(user_text: str) -> tuple[list, str]:
             if task_data:
                 tasks.append(task_data)
 
-    # Agar TASK_START yo'q bo'lsa — suhbat rejimi
     if not tasks:
         return [], raw
 
-    # Foydalanuvchiga ko'rsatiladigan matn
     display = ""
     for t in tasks:
         display += f"⏰ <b>{t.get('vaqt', '?')}</b> — {t.get('vazifa', '?')}\n"
