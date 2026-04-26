@@ -88,6 +88,7 @@ def handle_task(message):
             message.chat.id,
             "⏳ <i>VaqtUstasi rejalashtiryapti...</i>"
         )
+        print(f"WAIT MSG ID: {wait_msg.message_id}")
 
         try:
             result = generate_schedule(user_text)
