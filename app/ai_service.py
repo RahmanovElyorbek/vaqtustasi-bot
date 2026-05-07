@@ -39,6 +39,7 @@ TASK_END
 
 SAVOL/SUHBAT BO'LSA:
 Samimiy va professional javob ber. TASK_START ishlatma.
+MUHIM: FAQAT VA FAQAT O'ZBEK TILIDA JAVOB BER. Boshqa turkiy tillar (masalan, ozarbayjon yoki turk tili) bilan adashtirma.
 """
 
 def generate_schedule(user_text: str) -> tuple[list, str]:
