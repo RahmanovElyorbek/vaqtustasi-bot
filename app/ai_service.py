@@ -11,73 +11,35 @@ WEEKDAYS_UZ = {
     3: "Payshanba", 4: "Juma", 5: "Shanba", 6: "Yakshanba"
 }
 
-
 def get_system_prompt():
-    """Har safar yangi sana bilan prompt yaratamiz"""
     now = datetime.now(UZ_TZ)
     today_str = now.strftime("%Y-%m-%d")
     weekday = WEEKDAYS_UZ[now.weekday()]
     current_time = now.strftime("%H:%M")
     
     return f"""
-Sen VaqtUstasi — o'zbek tilidagi aqlli shaxsiy vaqt menejeri AI assistentsan.
+Sen "VaqtUstasi" — Supermarket Bosh Menejerining shaxsiy AI Agentisan.
+Mijozing juda band va uning kuni qat'iy tartibga ega.
 
-⏰ HOZIRGI SANA: {today_str} ({weekday})
+⏰ BUGUN: {today_str} ({weekday})
 ⏰ HOZIRGI VAQT: {current_time}
 
-Foydalanuvchi ikki xil murojaat qilishi mumkin:
+Menejerning qat'iy tartibi:
+1. ISH VAQTI: 07:00 dan 18:30 gacha do'konda. Bu vaqtda faqat operativ ishlarni rejalashtir.
+2. TUSHLIK: 13:00-13:20 oralig'ida (faqat 20 daqiqa). Bu vaqtga ish qo'yma!
+3. NAMOZ VAQTLARI: Foydalanuvchi namoz o'qiydi (Bomdod, Peshin, Asr, Shom, Xufton). Vazifalarni namoz vaqtlariga to'g'ri kelmaydigan qilib taqsimla.
+4. UY VAQTI: 18:30 dan keyin u uyda. Ish masalalarini iloji boricha ertaga qoldirishni maslahat ber.
 
-1. VAZIFA BERSA (aniq ish, vaqt, faoliyat):
-   Vazifani tahlil qil va energiya samaradorligiga qarab maslahat ber.
-   
-   MUHIM: Foydalanuvchi "ertaga", "dushanba", "3 kundan keyin" kabi so'zlarni ishlatsa,
-   sen ularni HOZIRGI SANAga qarab to'liq sanaga aylantirib ber (YYYY-MM-DD HH:MM).
-   
-   Misollar (bugun {today_str} bo'lsa):
-   - "Bugun 14da uchrashuv" → bugungi sana 14:00
-   - "Ertaga 9da sport" → ertangi sana 09:00
-   - "Juma kuni 16da" → keyingi juma kuni 16:00
-   
-   Energiya qoidalari (biznesmenlar uchun):
-   - 06:00-09:00 — eng yuqori energiya: strategik ishlar, muhim qarorlar
-   - 09:00-12:00 — uchrashuvlar, qo'ng'iroqlar, hisobotlar
-   - 12:00-14:00 — tushlik, dam olish
-   - 14:00-16:00 — operativ ishlar, xat-xabarlar
-   - 16:00-19:00 — ikkinchi cho'qqi: uchrashuvlar, sport
-   - 19:00+ — oila, dam olish (ish vazifalari tavsiya etilmaydi)
-   
-   Agar foydalanuvchi noto'g'ri vaqt tanlasa, qisqa maslahat ber.
-   
-   Javob formati:
-   TASK_START
-   vazifa: <vazifa nomi>
-   sana_vaqt: <YYYY-MM-DD HH:MM>
-   maslahat: <1 qator maslahat, kerak bo'lsa. Bo'lmasa bo'sh qoldir>
-   TASK_END
-
-2. SAVOL/SUHBAT BO'LSA:
-   Oddiy o'zbek tilida samimiy javob ber.
-   TASK_START/TASK_END ishlatma.
-
-Misol 1:
-"Ertaga 7da sport" →
+VAZIFA BERSA:
 TASK_START
-vazifa: Sport qilish
-sana_vaqt: <ertangi sana> 07:00
-maslahat:
+vazifa: <vazifa nomi>
+sana_vaqt: YYYY-MM-DD HH:MM
+maslahat: <Menejerga xos strategik maslahat: namoz yoki tushlikka xalaqit bermasligi haqida>
 TASK_END
 
-Misol 2:
-"Bugun 14:00 da muhim hisobot yozaman" →
-TASK_START
-vazifa: Hisobot yozish
-sana_vaqt: {today_str} 14:00
-maslahat: 💡 Hisobot yozish aqliy kuch talab qiladi. 09:00-11:00 da samaraliroq bo'ladi!
-TASK_END
-
-Faqat o'zbek tilida javob ber.
+SAVOL/SUHBAT BO'LSA:
+Samimiy va professional javob ber. TASK_START ishlatma.
 """
-
 
 def generate_schedule(user_text: str) -> tuple[list, str]:
     response = client.chat.completions.create(
@@ -86,50 +48,27 @@ def generate_schedule(user_text: str) -> tuple[list, str]:
             {"role": "system", "content": get_system_prompt()},
             {"role": "user", "content": user_text}
         ],
-        max_tokens=500,
-        timeout=15
+        max_tokens=500
     )
-
     raw = response.choices[0].message.content
-
     tasks = []
-    blocks = raw.split("TASK_START")
-    for block in blocks[1:]:
-        if "TASK_END" in block:
-            content = block.split("TASK_END")[0].strip()
-            lines = content.strip().split("\n")
-            task_data = {}
-            for line in lines:
-                if line.startswith("vazifa:"):
-                    task_data["vazifa"] = line.replace("vazifa:", "").strip()
-                elif line.startswith("sana_vaqt:"):
-                    datetime_str = line.replace("sana_vaqt:", "").strip()
-                    # "2026-04-27 14:00" formatini datetime ga aylantirish
-                    try:
-                        dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
-                        # Uzbekiston timezone bilan birlashtirish
-                        dt = dt.replace(tzinfo=UZ_TZ)
-                        task_data["sana_vaqt"] = dt
-                    except ValueError as e:
-                        print(f"DATE PARSE ERROR: {e}, raw: {datetime_str}")
-                        continue
-                elif line.startswith("maslahat:"):
-                    task_data["maslahat"] = line.replace("maslahat:", "").strip()
-            
-            if task_data.get("vazifa") and task_data.get("sana_vaqt"):
-                tasks.append(task_data)
-
-    if not tasks:
-        return [], raw
-
-    display = ""
-    for t in tasks:
-        dt = t["sana_vaqt"]
-        weekday = WEEKDAYS_UZ[dt.weekday()]
-        display += f"⏰ <b>{dt.strftime('%d-%B, %H:%M')} ({weekday})</b>\n"
-        display += f"   📌 {t['vazifa']}\n"
-        if t.get("maslahat"):
-            display += f"   {t['maslahat']}\n"
-        display += "\n"
-
-    return tasks, display
+    
+    if "TASK_START" in raw:
+        blocks = raw.split("TASK_START")
+        for block in blocks[1:]:
+            if "TASK_END" in block:
+                content = block.split("TASK_END")[0].strip()
+                lines = content.strip().split("\n")
+                t_data = {}
+                for line in lines:
+                    if "vazifa:" in line: t_data["vazifa"] = line.replace("vazifa:", "").strip()
+                    if "sana_vaqt:" in line:
+                        dt_str = line.replace("sana_vaqt:", "").strip()
+                        try:
+                            t_data["sana_vaqt"] = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=UZ_TZ)
+                        except: continue
+                    if "maslahat:" in line: t_data["maslahat"] = line.replace("maslahat:", "").strip()
+                if t_data.get("vazifa") and t_data.get("sana_vaqt"):
+                    tasks.append(t_data)
+        
+    return tasks, raw
