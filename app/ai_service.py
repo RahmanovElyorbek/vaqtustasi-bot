@@ -140,30 +140,30 @@ def generate_schedule(user_text: str, conversation_history: list = None) -> tupl
 
 def transcribe_audio(audio_file_path: str) -> str:
     """
-    Audio faylni transkripsiya qiladi.
+    Audio faylni o'zbek tilida transkripsiya qiladi.
     """
     try:
-        # Fayl hajmini tekshirish
         file_size = os.path.getsize(audio_file_path)
-        logger.info(f"Audio fayl hajmi: {file_size} bayt, yo'l: {audio_file_path}")
+        logger.info(f"Audio fayl hajmi: {file_size} bayt")
         
-        if file_size < 1000:  # 1KB dan kichik — juda qisqa
+        if file_size < 1000:
             logger.warning(f"Audio juda kichik: {file_size} bayt")
             return ""
         
         with open(audio_file_path, "rb") as f:
-            # AVVAL language parametrisiz sinab ko'ramiz
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                prompt="Toshkent supermarket menejer vazifa uchrashuv namoz tushlik"
+                language="uz",  # QAYTADAN qo'shildi — o'zbek tilini majburlash
+                prompt="O'zbek tilida yozilgan suhbat. Toshkent shahridagi supermarket menejeri vazifalari, uchrashuvlari, ishchilar bilan majlis, namoz vaqtlari, tushlik, yetkazib beruvchi, savdo vakili.",
+                temperature=0.0  # Eng aniq natija uchun
             )
         
         text = transcript.text.strip()
-        logger.info(f"Whisper transkripsiya natijasi: '{text}' (uzunlik: {len(text)})")
+        logger.info(f"Whisper natija: '{text}'")
         
         if not text:
-            logger.warning("Whisper bo'sh matn qaytardi")
+            return ""
         
         return text
         
