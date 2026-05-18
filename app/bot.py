@@ -69,7 +69,6 @@ scheduler.add_job(check_reminders, "interval", minutes=1)
 scheduler.start()
 
 
-# --- Callback (Bajardim/Yo'q tugmalari)
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     try:
@@ -77,15 +76,21 @@ def handle_callback(call):
         task_id = int(task_id)
         
         if action == "done":
-            mark_done(task_id)
+            mark_task_status(task_id, "done")
             bot.answer_callback_query(call.id, "✅ Ajoyib!")
-            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+            
         elif action == "skip":
-            bot.answer_callback_query(call.id, "Mayli, keyin urinib ko'ring")
-            bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+            mark_task_status(task_id, "skipped")
+            bot.answer_callback_query(call.id, "Mayli, keyingi safar")
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+            
     except Exception as e:
         logger.error(f"Callback xato: {e}", exc_info=True)
-
+        try:
+            bot.answer_callback_query(call.id, "❌ Xatolik")
+        except:
+            pass
 
 # --- Ovozli xabarlar
 @bot.message_handler(content_types=['voice'])
