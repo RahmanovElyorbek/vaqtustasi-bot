@@ -56,6 +56,11 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    # Status ustunini qo'shish (eski jadval uchun migratsiya)
+    cur.execute("""
+        ALTER TABLE tasks 
+        ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'
+    """)
     
     # Index'lar
     cur.execute("""
