@@ -11,8 +11,8 @@ from zoneinfo import ZoneInfo
 from app.ai_service import generate_schedule, transcribe_audio
 from app.database import (
     init_db, save_user, save_task, get_pending_tasks, 
-    mark_reminded, mark_done, save_message, get_recent_messages,
-    cleanup_old_messages
+    mark_reminded, mark_done, mark_task_status,  # YANGI
+    save_message, get_recent_messages, cleanup_old_messages
 )
 
 # Logging
