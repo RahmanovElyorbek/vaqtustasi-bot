@@ -189,3 +189,18 @@ def cleanup_old_messages(user_id: int, keep_last: int = 50):
     conn.commit()
     cur.close()
     conn.close()
+
+def mark_task_status(task_id: int, status: str):
+    """
+    status: 'done' yoki 'skipped'
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE tasks 
+        SET is_done = TRUE, status = %s 
+        WHERE id = %s
+    """, (status, task_id))
+    conn.commit()
+    cur.close()
+    conn.close()
