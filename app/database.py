@@ -16,8 +16,6 @@ def init_db():
     conn = get_connection()
     cur = conn.cursor()
     
-    # DIQQAT: DROP TABLE OLIB TASHLANDI — vazifalar saqlanib qoladi
-    
     # Foydalanuvchilar jadvali
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -42,7 +40,13 @@ def init_db():
         )
     """)
     
-    # YANGI: xabarlar tarixi (AI kontekst uchun)
+    # YANGI: status ustunini qo'shish (agar yo'q bo'lsa)
+    cur.execute("""
+        ALTER TABLE tasks 
+        ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'
+    """)
+    
+    # Xabarlar tarixi (AI kontekst uchun)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
@@ -53,7 +57,7 @@ def init_db():
         )
     """)
     
-    # Index'lar (tezlik uchun)
+    # Index'lar
     cur.execute("""
         CREATE INDEX IF NOT EXISTS idx_tasks_pending 
         ON tasks(scheduled_time) 
@@ -69,7 +73,6 @@ def init_db():
     cur.close()
     conn.close()
     print("✅ Database initialized!")
-
 
 def save_user(user_id, first_name):
     conn = get_connection()
