@@ -139,34 +139,64 @@ def generate_schedule(user_text: str, conversation_history: list = None) -> tupl
 
 
 def transcribe_audio(audio_file_path: str) -> str:
-    """
-    Audio faylni o'zbek tilida transkripsiya qiladi.
-    """
     try:
         file_size = os.path.getsize(audio_file_path)
         logger.info(f"Audio fayl hajmi: {file_size} bayt")
         
-        if file_size < 1000:
-            logger.warning(f"Audio juda kichik: {file_size} bayt")
+        if file_size < 100:
             return ""
         
+        # 1-bosqich: Whisper bilan transkripsiya
         with open(audio_file_path, "rb") as f:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                language="uz",  # QAYTADAN qo'shildi — o'zbek tilini majburlash
-                prompt="O'zbek tilida yozilgan suhbat. Toshkent shahridagi supermarket menejeri vazifalari, uchrashuvlari, ishchilar bilan majlis, namoz vaqtlari, tushlik, yetkazib beruvchi, savdo vakili.",
-                temperature=0.0  # Eng aniq natija uchun
+                prompt="Bu o'zbek tilida yozilgan suhbat. Toshkent supermarket menejeri vazifalarini aytadi: uchrashuv, majlis, ishchilar, yetkazib beruvchi, savdo vakili, namoz, tushlik, soat, ertaga, bugun.",
+                temperature=0.0
             )
         
-        text = transcript.text.strip()
-        logger.info(f"Whisper natija: '{text}'")
+        raw_text = transcript.text.strip()
+        logger.info(f"Whisper raw natija: '{raw_text}'")
         
-        if not text:
+        if not raw_text:
             return ""
         
-        return text
+        # 2-bosqich: AI bilan o'zbek tiliga to'g'irlash
+        correction = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Sen transkripsiya tuzatuvchisisan. Foydalanuvchidan kelgan matn o'zbek tilida (lotin yozuvida) gapirilgan, lekin Whisper uni boshqa turkiy til (turk, ozarbayjon) deb noto'g'ri transkripsiya qilgan bo'lishi mumkin.
+
+Sening vazifang: matnni TO'G'RI o'zbek tiliga (lotin yozuvida) o'tkazish.
+
+QOIDALAR:
+- Ma'noni saqlab qol
+- O'zbek tilining standart so'zlarini ishlat
+- Sonlar, vaqtlar, ismlarni o'zgartirma
+- Faqat tuzatilgan o'zbek tilidagi matnni qaytar, boshqa hech narsa yozma
+- Agar matn allaqachon o'zbek tilida bo'lsa — o'zgartirmasdan qaytar
+
+MISOL:
+Kirish: "bir gün saat 16.00'ın önünde bol bağırış"
+Chiqish: "Bir kuni soat 16:00 da ishchilar bilan majlis"
+
+Kirish: "yarın saat on da satıcı ile görüşme var"
+Chiqish: "Ertaga soat 10 da yetkazib beruvchi bilan uchrashuv bor" """
+                },
+                {"role": "user", "content": raw_text}
+            ],
+            temperature=0.0,
+            max_tokens=300
+        )
+        
+        corrected_text = correction.choices[0].message.content.strip()
+        logger.info(f"Tuzatilgan matn: '{corrected_text}'")
+        
+        return corrected_text
         
     except Exception as e:
         logger.error(f"Whisper xato: {type(e).__name__}: {e}", exc_info=True)
+        return ""        logger.error(f"Whisper xato: {type(e).__name__}: {e}", exc_info=True)
         return ""
