@@ -40,7 +40,7 @@ def init_db():
         )
     """)
     
-    # YANGI: status ustunini qo'shish (agar yo'q bo'lsa)
+    # Status ustunini qo'shish (migratsiya)
     cur.execute("""
         ALTER TABLE tasks 
         ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'
@@ -56,10 +56,26 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
-    # Status ustunini qo'shish (eski jadval uchun migratsiya)
+    
+    # YANGI: Namoz vaqtlari jadvali
     cur.execute("""
-        ALTER TABLE tasks 
-        ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'
+        CREATE TABLE IF NOT EXISTS prayer_times (
+            id SERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            date DATE NOT NULL,
+            fajr TIME NOT NULL,
+            dhuhr TIME NOT NULL,
+            asr TIME NOT NULL,
+            maghrib TIME NOT NULL,
+            isha TIME NOT NULL,
+            reminded_fajr BOOLEAN DEFAULT FALSE,
+            reminded_dhuhr BOOLEAN DEFAULT FALSE,
+            reminded_asr BOOLEAN DEFAULT FALSE,
+            reminded_maghrib BOOLEAN DEFAULT FALSE,
+            reminded_isha BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, date)
+        )
     """)
     
     # Index'lar
@@ -74,10 +90,16 @@ def init_db():
         ON messages(user_id, created_at DESC)
     """)
     
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_prayer_times_user_date 
+        ON prayer_times(user_id, date)
+    """)
+    
     conn.commit()
     cur.close()
     conn.close()
     print("✅ Database initialized!")
+
 
 def save_user(user_id, first_name):
     conn = get_connection()
@@ -138,13 +160,22 @@ def mark_done(task_id):
     conn.close()
 
 
-# YANGI FUNKSIYALAR — xabarlar tarixi uchun
+def mark_task_status(task_id: int, status: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE tasks 
+        SET is_done = TRUE, status = %s 
+        WHERE id = %s
+    """, (status, task_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# === XABARLAR TARIXI ===
 
 def save_message(user_id: int, role: str, content: str):
-    """
-    role: 'user' yoki 'assistant'
-    content: xabar matni
-    """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -157,10 +188,6 @@ def save_message(user_id: int, role: str, content: str):
 
 
 def get_recent_messages(user_id: int, limit: int = 10) -> list:
-    """
-    Foydalanuvchining oxirgi N ta xabarini xronologik tartibda qaytaradi.
-    AI uchun kontekst sifatida ishlatiladi.
-    """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -172,16 +199,10 @@ def get_recent_messages(user_id: int, limit: int = 10) -> list:
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    
-    # Eskidan yangiga qarab qaytarish
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
 
 def cleanup_old_messages(user_id: int, keep_last: int = 50):
-    """
-    Eski xabarlarni o'chiradi — baza katta bo'lib ketmasligi uchun.
-    Foydalanuvchi uchun faqat oxirgi N ta xabarni saqlaydi.
-    """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -198,17 +219,150 @@ def cleanup_old_messages(user_id: int, keep_last: int = 50):
     cur.close()
     conn.close()
 
-def mark_task_status(task_id: int, status: str):
-    """
-    status: 'done' yoki 'skipped'
-    """
+
+# === NAMOZ VAQTLARI FUNKSIYALARI (YANGI) ===
+
+def save_user_location(user_id: int, latitude: float, longitude: float):
+    """Foydalanuvchi lokatsiyasini saqlash"""
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        UPDATE tasks 
-        SET is_done = TRUE, status = %s 
+        UPDATE users 
+        SET latitude = %s, longitude = %s 
+        WHERE user_id = %s
+    """, (latitude, longitude, user_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_user_location(user_id: int):
+    """Foydalanuvchi lokatsiyasini olish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT latitude, longitude FROM users WHERE user_id = %s
+    """, (user_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if row and row["latitude"] and row["longitude"]:
+        return row["latitude"], row["longitude"]
+    return None
+
+
+def save_prayer_times(user_id: int, date, times: dict):
+    """times: {"fajr": "05:30", "dhuhr": "13:00", ...}"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO prayer_times (user_id, date, fajr, dhuhr, asr, maghrib, isha)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (user_id, date) DO UPDATE SET
+            fajr = EXCLUDED.fajr,
+            dhuhr = EXCLUDED.dhuhr,
+            asr = EXCLUDED.asr,
+            maghrib = EXCLUDED.maghrib,
+            isha = EXCLUDED.isha
+    """, (
+        user_id, date,
+        times["fajr"], times["dhuhr"], times["asr"],
+        times["maghrib"], times["isha"]
+    ))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_prayer_times(user_id: int, date):
+    """Berilgan kun uchun namoz vaqtlarini olish"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT fajr, dhuhr, asr, maghrib, isha
+        FROM prayer_times 
+        WHERE user_id = %s AND date = %s
+    """, (user_id, date))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_users_with_location():
+    """Lokatsiya bergan barcha foydalanuvchilar"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT user_id, latitude, longitude FROM users 
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_upcoming_prayer_reminders():
+    """15 daqiqa ichida bo'ladigan namozlarni topish"""
+    from datetime import timedelta
+    
+    conn = get_connection()
+    cur = conn.cursor()
+    now_uz = datetime.now(UZ_TZ)
+    today = now_uz.date()
+    current_time = now_uz.time()
+    future_time = (now_uz + timedelta(minutes=15)).time()
+    
+    cur.execute("""
+        SELECT id, user_id, date, fajr, dhuhr, asr, maghrib, isha,
+               reminded_fajr, reminded_dhuhr, reminded_asr, 
+               reminded_maghrib, reminded_isha
+        FROM prayer_times
+        WHERE date = %s
+    """, (today,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    reminders = []
+    prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"]
+    prayer_names_uz = {
+        "fajr": "Bomdod", "dhuhr": "Peshin", "asr": "Asr",
+        "maghrib": "Shom", "isha": "Xufton"
+    }
+    
+    for row in rows:
+        row = dict(row)
+        for prayer in prayers:
+            prayer_time = row[prayer]
+            already_reminded = row[f"reminded_{prayer}"]
+            
+            if already_reminded:
+                continue
+            
+            if current_time <= prayer_time <= future_time:
+                reminders.append({
+                    "id": row["id"],
+                    "user_id": row["user_id"],
+                    "prayer": prayer,
+                    "prayer_name_uz": prayer_names_uz[prayer],
+                    "time": prayer_time
+                })
+    
+    return reminders
+
+
+def mark_prayer_reminded(prayer_times_id: int, prayer: str):
+    """Namoz eslatilgan deb belgilash"""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(f"""
+        UPDATE prayer_times 
+        SET reminded_{prayer} = TRUE 
         WHERE id = %s
-    """, (status, task_id))
+    """, (prayer_times_id,))
     conn.commit()
     cur.close()
     conn.close()

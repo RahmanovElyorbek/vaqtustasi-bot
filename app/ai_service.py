@@ -1,7 +1,11 @@
 import os
+import json
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 UZ_TZ = ZoneInfo("Asia/Tashkent")
@@ -11,65 +15,187 @@ WEEKDAYS_UZ = {
     3: "Payshanba", 4: "Juma", 5: "Shanba", 6: "Yakshanba"
 }
 
+
 def get_system_prompt():
     now = datetime.now(UZ_TZ)
     today_str = now.strftime("%Y-%m-%d")
     weekday = WEEKDAYS_UZ[now.weekday()]
     current_time = now.strftime("%H:%M")
     
-    return f"""
-Sen "VaqtUstasi" — Supermarket Bosh Menejerining shaxsiy AI Agentisan.
-Mijozing juda band va uning kuni qat'iy tartibga ega.
+    return f"""Sen — VaqtUstasi, o'zbek tilida ishlovchi shaxsiy vaqt menejmenti AI yordamchisi. Mijozing — Toshkentdagi supermarket bosh menejeri.
 
-⏰ BUGUN: {today_str} ({weekday})
-⏰ HOZIRGI VAQT: {current_time}
+BUGUN: {today_str} ({weekday}), HOZIR: {current_time}
 
-Menejerning qat'iy tartibi:
-1. ISH VAQTI: 07:00 dan 18:30 gacha do'konda. Bu vaqtda faqat operativ ishlarni rejalashtir.
-2. TUSHLIK: 13:00-13:20 oralig'ida (faqat 20 daqiqa). Bu vaqtga ish qo'yma!
-3. NAMOZ VAQTLARI: Foydalanuvchi namoz o'qiydi (Bomdod, Peshin, Asr, Shom, Xufton). Vazifalarni namoz vaqtlariga to'g'ri kelmaydigan qilib taqsimla.
-4. UY VAQTI: 18:30 dan keyin u uyda. Ish masalalarini iloji boricha ertaga qoldirishni maslahat ber.
+MIJOZ TARTIBI:
+• 07:00–18:30 — ish vaqti (supermarketda)
+• 13:00–13:20 — tushlik (ish qo'yma)
+• Namoz vaqtlari — bo'sh bo'lishi kerak (Bomdod, Peshin, Asr, Shom, Xufton)
+• 18:30 dan keyin — uy vaqti (ish masalalarini ertaga qoldir)
 
-VAZIFA BERSA:
-TASK_START
-vazifa: <vazifa nomi>
-sana_vaqt: YYYY-MM-DD HH:MM
-maslahat: <Menejerga xos strategik maslahat: namoz yoki tushlikka xalaqit bermasligi haqida>
-TASK_END
+JAVOB QOIDALARI:
+1. FAQAT o'zbek tilida (lotin yozuvi). Turk/ozarbayjon tiliga aralashtirma.
+2. Har javob 2-4 jumladan oshmasin. Qisqa va aniq.
+3. ANIQ vaqt va ANIQ harakat ayt — "rejalashtiring" emas, "soat 10:00 da boshlang, 30 daqiqa" deb ayt.
+4. "Hurmatli mijoz", "Hurmatli menejer" deb murojaat QILMA. Oddiy gaplash.
+5. Har javob oxiriga "Yordam berishga tayyorman", "Marhamat", "Katta rahmat" kabi jumlalar QO'SHMA.
+6. "Raqamli", "operativ", "dasturiy ta'minot" kabi bo'sh so'zlardan foydalanma.
+7. Agar so'rov noaniq bo'lsa — aniqlashtiruvchi savol ber.
 
-SAVOL/SUHBAT BO'LSA:
-Samimiy va professional javob ber. TASK_START ishlatma.
-MUHIM: FAQAT VA FAQAT O'ZBEK TILIDA JAVOB BER. Boshqa turkiy tillar (masalan, ozarbayjon yoki turk tili) bilan adashtirma.
+JAVOB FORMATI:
+Sen har doim JSON formatda javob qaytar. Hech qachon JSON tashqarisida matn yozma.
+
+{{
+  "javob": "Foydalanuvchiga ko'rinadigan matn (2-4 jumla)",
+  "vazifalar": [
+    {{
+      "nomi": "vazifa nomi",
+      "sana_vaqt": "YYYY-MM-DD HH:MM",
+      "izoh": "qisqa strategik maslahat"
+    }}
+  ]
+}}
+
+Agar vazifa qo'shilmasa, "vazifalar" bo'sh ro'yxat bo'ladi: []
+
+MISOLLAR:
+
+Foydalanuvchi: "Ertaga 10:00 da firma bilan uchrashuvim bor"
+Sen:
+{{
+  "javob": "Yaxshi, ertaga 10:00 da uchrashuvni qo'shdim. Tayyorgarlik uchun bugun 21:00–21:30 oralig'ida 30 daqiqa ajrating — material o'qib, savollar ro'yxatini tuzing.",
+  "vazifalar": [
+    {{"nomi": "Firma bilan uchrashuv", "sana_vaqt": "2026-05-19 10:00", "izoh": "Ish vaqti ichida"}},
+    {{"nomi": "Uchrashuvga tayyorgarlik", "sana_vaqt": "2026-05-18 21:00", "izoh": "Uy vaqti, 30 daqiqa"}}
+  ]
+}}
+
+Foydalanuvchi: "Vaqtim yetmayapti"
+Sen:
+{{
+  "javob": "Bugun nechta vazifa bor va ulardan eng muhimi qaysi? Aniq aytsangiz, soat bo'yicha reja tuzaman.",
+  "vazifalar": []
+}}
+
+Foydalanuvchi: "Sport bilan qachon shug'ullanay?"
+Sen:
+{{
+  "javob": "Ish 18:30 da tugaydi. 19:00–20:00 oralig'ida 45 daqiqa sport uchun ajrating — bu Xufton namozigacha tugaydi.",
+  "vazifalar": [
+    {{"nomi": "Sport", "sana_vaqt": "2026-05-18 19:00", "izoh": "Ish va Xufton orasida"}}
+  ]
+}}
 """
 
-def generate_schedule(user_text: str) -> tuple[list, str]:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": get_system_prompt()},
-            {"role": "user", "content": user_text}
-        ],
-        max_tokens=500
-    )
-    raw = response.choices[0].message.content
-    tasks = []
+
+def generate_schedule(user_text: str, conversation_history: list = None) -> tuple[list, str]:
+    """
+    user_text: yangi foydalanuvchi xabari
+    conversation_history: [{"role": "user/assistant", "content": "..."}]
+    """
+    if conversation_history is None:
+        conversation_history = []
     
-    if "TASK_START" in raw:
-        blocks = raw.split("TASK_START")
-        for block in blocks[1:]:
-            if "TASK_END" in block:
-                content = block.split("TASK_END")[0].strip()
-                lines = content.strip().split("\n")
-                t_data = {}
-                for line in lines:
-                    if "vazifa:" in line: t_data["vazifa"] = line.replace("vazifa:", "").strip()
-                    if "sana_vaqt:" in line:
-                        dt_str = line.replace("sana_vaqt:", "").strip()
-                        try:
-                            t_data["sana_vaqt"] = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=UZ_TZ)
-                        except: continue
-                    if "maslahat:" in line: t_data["maslahat"] = line.replace("maslahat:", "").strip()
-                if t_data.get("vazifa") and t_data.get("sana_vaqt"):
-                    tasks.append(t_data)
+    # Oxirgi 10 ta xabarni olish
+    recent = conversation_history[-10:]
+    
+    messages = [{"role": "system", "content": get_system_prompt()}]
+    messages.extend(recent)
+    messages.append({"role": "user", "content": user_text})
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=600,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
         
-    return tasks, raw
+        raw = response.choices[0].message.content
+        data = json.loads(raw)
+        
+        tasks = []
+        for v in data.get("vazifalar", []):
+            try:
+                dt = datetime.strptime(v["sana_vaqt"], "%Y-%m-%d %H:%M").replace(tzinfo=UZ_TZ)
+                tasks.append({
+                    "vazifa": v["nomi"],
+                    "sana_vaqt": dt,
+                    "maslahat": v.get("izoh", "")
+                })
+            except (KeyError, ValueError) as e:
+                logger.warning(f"Vazifa parse xatosi: {e}, data: {v}")
+                continue
+        
+        javob = data.get("javob", "Kechirasiz, javob bera olmadim.")
+        return tasks, javob
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parse xato: {e}, raw: {raw if 'raw' in locals() else 'N/A'}")
+        return [], "Kechirasiz, javob formatida xato. Qayta urinib ko'ring."
+    except Exception as e:
+        logger.error(f"OpenAI API xato: {e}", exc_info=True)
+        return [], "Kechirasiz, texnik muammo. Birozdan keyin urinib ko'ring."
+
+
+def transcribe_audio(audio_file_path: str) -> str:
+    try:
+        file_size = os.path.getsize(audio_file_path)
+        logger.info(f"Audio fayl hajmi: {file_size} bayt")
+        
+        if file_size < 100:
+            return ""
+        
+        # 1-bosqich: Whisper bilan transkripsiya
+        with open(audio_file_path, "rb") as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                prompt="Bu o'zbek tilida yozilgan suhbat. Toshkent supermarket menejeri vazifalarini aytadi: uchrashuv, majlis, ishchilar, yetkazib beruvchi, savdo vakili, namoz, tushlik, soat, ertaga, bugun.",
+                temperature=0.0
+            )
+        
+        raw_text = transcript.text.strip()
+        logger.info(f"Whisper raw natija: '{raw_text}'")
+        
+        if not raw_text:
+            return ""
+        
+        # 2-bosqich: AI bilan o'zbek tiliga to'g'irlash
+        correction = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Sen transkripsiya tuzatuvchisisan. Foydalanuvchidan kelgan matn o'zbek tilida (lotin yozuvida) gapirilgan, lekin Whisper uni boshqa turkiy til (turk, ozarbayjon) deb noto'g'ri transkripsiya qilgan bo'lishi mumkin.
+
+Sening vazifang: matnni TO'G'RI o'zbek tiliga (lotin yozuvida) o'tkazish.
+
+QOIDALAR:
+- Ma'noni saqlab qol
+- O'zbek tilining standart so'zlarini ishlat
+- Sonlar, vaqtlar, ismlarni o'zgartirma
+- Faqat tuzatilgan o'zbek tilidagi matnni qaytar, boshqa hech narsa yozma
+- Agar matn allaqachon o'zbek tilida bo'lsa — o'zgartirmasdan qaytar
+
+MISOL:
+Kirish: "bir gün saat 16.00'ın önünde bol bağırış"
+Chiqish: "Bir kuni soat 16:00 da ishchilar bilan majlis"
+
+Kirish: "yarın saat on da satıcı ile görüşme var"
+Chiqish: "Ertaga soat 10 da yetkazib beruvchi bilan uchrashuv bor" """
+                },
+                {"role": "user", "content": raw_text}
+            ],
+            temperature=0.0,
+            max_tokens=300
+        )
+        
+        corrected_text = correction.choices[0].message.content.strip()
+        logger.info(f"Tuzatilgan matn: '{corrected_text}'")
+        
+        return corrected_text
+        
+    except Exception as e:
+        logger.error(f"Whisper xato: {type(e).__name__}: {e}", exc_info=True)
+        return ""
