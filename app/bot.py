@@ -14,7 +14,8 @@ from app.database import (
     mark_reminded, mark_done, mark_task_status,
     save_message, get_recent_messages, cleanup_old_messages,
     save_user_location, get_user_location,
-    get_upcoming_prayer_reminders, mark_prayer_reminded
+    get_upcoming_prayer_reminders, mark_prayer_reminded,
+    get_prayer_times
 )
 from app.prayer_service import (
     update_all_users_prayer_times, get_today_prayer_times_text,
@@ -271,7 +272,12 @@ def process_user_message(chat_id: int, user_id: int, first_name: str, text: str)
         history = get_recent_messages(user_id, limit=10)
         history = history[:-1] if history else []
         
-        tasks, javob = generate_schedule(text, history)
+        # Bugungi namoz vaqtlarini olish
+        today = datetime.now(UZ_TZ).date()
+        prayer_times = get_prayer_times(user_id, today)
+        
+        # AI'ga uzatish (namoz vaqtlari bilan)
+        tasks, javob = generate_schedule(text, history, prayer_times)
         
         save_message(user_id, "assistant", javob)
         

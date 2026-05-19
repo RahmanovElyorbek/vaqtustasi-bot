@@ -87,18 +87,35 @@ Sen:
 """
 
 
-def generate_schedule(user_text: str, conversation_history: list = None) -> tuple[list, str]:
+def generate_schedule(user_text: str, conversation_history: list = None, prayer_times: dict = None) -> tuple[list, str]:
     """
     user_text: yangi foydalanuvchi xabari
     conversation_history: [{"role": "user/assistant", "content": "..."}]
+    prayer_times: {"fajr": time, "dhuhr": time, ...} yoki None
     """
     if conversation_history is None:
         conversation_history = []
     
-    # Oxirgi 10 ta xabarni olish
     recent = conversation_history[-10:]
     
-    messages = [{"role": "system", "content": get_system_prompt()}]
+    # System prompt'ga namoz vaqtlarini qo'shish
+    system_prompt = get_system_prompt()
+    
+    if prayer_times:
+        prayer_info = (
+            f"\n\nBUGUNGI NAMOZ VAQTLARI (vazifa taqsimlashda HISOBGA OL):\n"
+            f"• Bomdod: {prayer_times['fajr'].strftime('%H:%M')}\n"
+            f"• Peshin: {prayer_times['dhuhr'].strftime('%H:%M')}\n"
+            f"• Asr: {prayer_times['asr'].strftime('%H:%M')}\n"
+            f"• Shom: {prayer_times['maghrib'].strftime('%H:%M')}\n"
+            f"• Xufton: {prayer_times['isha'].strftime('%H:%M')}\n\n"
+            f"MUHIM QOIDA: Agar foydalanuvchi taklif qilgan vazifa vaqti namoz vaqtiga 15 daqiqa oldin yoki keyin tushsa, "
+            f"foydalanuvchini OGOHLANTIR va boshqa vaqt tavsiya qil. "
+            f"Masalan: 'Bu vaqt Peshin namoziga to'g'ri keladi. 12:30 yoki 14:00 ni tavsiya qilaman.'"
+        )
+        system_prompt += prayer_info
+    
+    messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent)
     messages.append({"role": "user", "content": user_text})
     
@@ -136,7 +153,6 @@ def generate_schedule(user_text: str, conversation_history: list = None) -> tupl
     except Exception as e:
         logger.error(f"OpenAI API xato: {e}", exc_info=True)
         return [], "Kechirasiz, texnik muammo. Birozdan keyin urinib ko'ring."
-
 
 def transcribe_audio(audio_file_path: str) -> str:
     try:
