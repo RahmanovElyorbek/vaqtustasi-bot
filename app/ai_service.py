@@ -198,5 +198,4 @@ Chiqish: "Ertaga soat 10 da yetkazib beruvchi bilan uchrashuv bor" """
         
     except Exception as e:
         logger.error(f"Whisper xato: {type(e).__name__}: {e}", exc_info=True)
-        return ""        logger.error(f"Whisper xato: {type(e).__name__}: {e}", exc_info=True)
         return ""
