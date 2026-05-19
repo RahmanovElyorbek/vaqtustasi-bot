@@ -11,8 +11,14 @@ from zoneinfo import ZoneInfo
 from app.ai_service import generate_schedule, transcribe_audio
 from app.database import (
     init_db, save_user, save_task, get_pending_tasks, 
-    mark_reminded, mark_done, mark_task_status,  # YANGI
-    save_message, get_recent_messages, cleanup_old_messages
+    mark_reminded, mark_done, mark_task_status,
+    save_message, get_recent_messages, cleanup_old_messages,
+    save_user_location, get_user_location,
+    get_upcoming_prayer_reminders, mark_prayer_reminded
+)
+from app.prayer_service import (
+    update_all_users_prayer_times, get_today_prayer_times_text,
+    ensure_today_prayer_times
 )
 
 # Logging
@@ -37,7 +43,7 @@ app = Flask(__name__)
 init_db()
 
 
-# --- Eslatmalar
+# --- Vazifa eslatmalari
 def check_reminders():
     try:
         tasks = get_pending_tasks()
@@ -55,6 +61,26 @@ def check_reminders():
         logger.error(f"check_reminders umumiy xato: {e}", exc_info=True)
 
 
+# --- Namoz eslatmalari
+def check_prayer_reminders():
+    try:
+        reminders = get_upcoming_prayer_reminders()
+        for r in reminders:
+            try:
+                time_str = r["time"].strftime("%H:%M")
+                bot.send_message(
+                    r["user_id"],
+                    f"🕌 <b>{r['prayer_name_uz']} vaqti yaqinlashmoqda</b>\n\n"
+                    f"⏰ Vaqt: <b>{time_str}</b>\n"
+                    f"📿 Tayyorlanish uchun 15 daqiqa qoldi"
+                )
+                mark_prayer_reminded(r["id"], r["prayer"])
+            except Exception as e:
+                logger.error(f"Namoz eslatma xato (user {r['user_id']}): {e}")
+    except Exception as e:
+        logger.error(f"check_prayer_reminders xato: {e}", exc_info=True)
+
+
 def done_keyboard(task_id):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.add(
@@ -64,10 +90,100 @@ def done_keyboard(task_id):
     return keyboard
 
 
+# --- Scheduler
 scheduler = BackgroundScheduler(timezone=UZ_TZ)
-scheduler.add_job(check_reminders, "interval", minutes=1)
+scheduler.add_job(check_reminders, "interval", minutes=1, id="task_reminders")
+scheduler.add_job(check_prayer_reminders, "interval", minutes=1, id="prayer_reminders")
+scheduler.add_job(
+    update_all_users_prayer_times, 
+    "cron", 
+    hour=0, 
+    minute=1,
+    id="daily_prayer_update"
+)
 scheduler.start()
 
+
+# === BUYRUQLAR ===
+
+@bot.message_handler(commands=['start'])
+def handle_start(message):
+    save_user(message.from_user.id, message.from_user.first_name)
+    
+    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    keyboard.add(telebot.types.KeyboardButton("📍 Lokatsiyani yuborish", request_location=True))
+    
+    bot.send_message(
+        message.chat.id,
+        f"Assalomu alaykum, {message.from_user.first_name}! 👋\n\n"
+        f"Men <b>VaqtUstasi</b> — sizning shaxsiy vaqt menejmenti yordamchingizman.\n\n"
+        f"🎯 Men nima qila olaman:\n"
+        f"• Vazifalaringizni rejaga kiritaman\n"
+        f"• Vaqti yetganda eslatib turaman\n"
+        f"• Namoz vaqtlariga to'g'ri kelmaydigan qilib taqsimlayman\n"
+        f"• Audio xabarlarni tushunaman\n\n"
+        f"📍 Avval lokatsiyangizni yuboring — namoz vaqtlarini aniq belgilash uchun.",
+        reply_markup=keyboard
+    )
+
+
+@bot.message_handler(commands=['namoz'])
+def handle_namoz(message):
+    text = get_today_prayer_times_text(message.from_user.id)
+    bot.send_message(message.chat.id, text)
+
+
+@bot.message_handler(commands=['help'])
+def handle_help(message):
+    bot.send_message(
+        message.chat.id,
+        "🤖 <b>VaqtUstasi yordam</b>\n\n"
+        "📝 <b>Buyruqlar:</b>\n"
+        "/start — Botni qayta ishga tushirish\n"
+        "/namoz — Bugungi namoz vaqtlari\n"
+        "/help — Yordam\n\n"
+        "💬 <b>Qanday ishlatish:</b>\n"
+        "• Matn yoki audio yuboring\n"
+        "• Misol: \"Ertaga 10:00 da uchrashuv\"\n"
+        "• Bot avtomatik vazifani qo'shadi va vaqti yetganda eslatadi"
+    )
+
+
+# === LOKATSIYA ===
+
+@bot.message_handler(content_types=['location'])
+def handle_location(message):
+    try:
+        user_id = message.from_user.id
+        lat = message.location.latitude
+        lon = message.location.longitude
+        
+        save_user(user_id, message.from_user.first_name)
+        save_user_location(user_id, lat, lon)
+        
+        wait_msg = bot.send_message(message.chat.id, "🕌 <i>Namoz vaqtlari olinmoqda...</i>")
+        success = ensure_today_prayer_times(user_id, lat, lon)
+        
+        if success:
+            prayer_text = get_today_prayer_times_text(user_id)
+            bot.edit_message_text(
+                f"✅ <b>Lokatsiya saqlandi!</b>\n\n{prayer_text}\n\n"
+                f"💡 Endi men sizga vazifalarni namoz vaqtlariga to'g'ri kelmaydigan qilib taqsimlayman.",
+                chat_id=wait_msg.chat.id,
+                message_id=wait_msg.message_id
+            )
+        else:
+            bot.edit_message_text(
+                "✅ Lokatsiya saqlandi, lekin namoz vaqtlarini olishda muammo. Keyinroq /namoz ni sinab ko'ring.",
+                chat_id=wait_msg.chat.id,
+                message_id=wait_msg.message_id
+            )
+    except Exception as e:
+        logger.error(f"Location handler xato: {e}", exc_info=True)
+        bot.send_message(message.chat.id, "❌ Lokatsiyani saqlashda xato.")
+
+
+# === CALLBACK (Bajardim/Yo'q) ===
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
@@ -92,23 +208,21 @@ def handle_callback(call):
         except:
             pass
 
+
 # --- Ovozli xabarlar
 @bot.message_handler(content_types=['voice'])
 def handle_voice(message):
     wait_msg = bot.send_message(message.chat.id, "🎤 <i>Eshityapman...</i>")
     
-    # Unique fayl nomi (har foydalanuvchi uchun alohida)
     audio_path = os.path.join(AUDIO_DIR, f"{message.from_user.id}_{uuid.uuid4().hex}.ogg")
     
     try:
-        # Audio yuklab olish
         file_info = bot.get_file(message.voice.file_id)
         downloaded = bot.download_file(file_info.file_path)
         
         with open(audio_path, "wb") as f:
             f.write(downloaded)
         
-        # Transkripsiya
         text = transcribe_audio(audio_path)
         
         if not text:
@@ -118,13 +232,9 @@ def handle_voice(message):
             )
             return
         
-        # Wait xabarini o'chirish
         bot.delete_message(message.chat.id, wait_msg.message_id)
-        
-        # Transkripsiyani foydalanuvchiga ko'rsatish (shaffoflik uchun)
         bot.send_message(message.chat.id, f"🎤 <i>Sizdan: {text}</i>")
         
-        # AI'ga yuborish
         process_user_message(message.chat.id, message.from_user.id, message.from_user.first_name, text)
         
     except Exception as e:
@@ -137,7 +247,6 @@ def handle_voice(message):
         except:
             pass
     finally:
-        # Audio faylni o'chirish (disk to'lmasligi uchun)
         if os.path.exists(audio_path):
             try:
                 os.remove(audio_path)
@@ -151,31 +260,24 @@ def handle_text(message):
     process_user_message(message.chat.id, message.from_user.id, message.from_user.first_name, message.text)
 
 
-# --- Asosiy mantiq (matn va audio uchun bitta funksiya)
+# --- Asosiy mantiq
 def process_user_message(chat_id: int, user_id: int, first_name: str, text: str):
     save_user(user_id, first_name)
     wait_msg = bot.send_message(chat_id, "⏳ <i>O'ylayapman...</i>")
     
     try:
-        # Foydalanuvchi xabarini bazaga saqlash
         save_message(user_id, "user", text)
         
-        # Kontekst (oldingi xabarlar)
         history = get_recent_messages(user_id, limit=10)
-        # Yangi xabarni history'dan chiqarib tashlash (u allaqachon save_message orqali qo'shildi)
         history = history[:-1] if history else []
         
-        # AI'dan javob olish
         tasks, javob = generate_schedule(text, history)
         
-        # Bot javobini bazaga saqlash
         save_message(user_id, "assistant", javob)
         
-        # Eski xabarlarni tozalash (har 10 ta xabardan keyin)
         if len(history) >= 20:
             cleanup_old_messages(user_id, keep_last=50)
         
-        # Vazifalarni saqlash va ko'rsatish
         if tasks:
             display = javob + "\n\n📅 <b>Rejaga qo'shildi:</b>\n\n"
             for t in tasks:
